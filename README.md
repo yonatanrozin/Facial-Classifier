@@ -21,5 +21,6 @@ A python script that uses a trained neural network to recognize faces from the w
 
 ## Running
 - ```cd``` into cloned repo folder
+- (optional) run ```python3 classifier.py list``` to get a list of trained face classes
 - run ```python3 classifier.py run``` to begin running. A new window with the webcam view and classification results should pop up automatically.
 - press Q at any time to quit
