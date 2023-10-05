@@ -118,14 +118,13 @@ if "run" in argv:
 
         if (success):
 
+            print(frame.shape)
+
             output_frame = frame.copy()
 
             faces = croppedFacesFromImg(frame, 'haar')
             if len(faces) == 0:
                 continue
-
-            rows = 3
-            columns = 7 # 1 for input, 1 blank, 5 for top 5 matches
 
             for i in range(len(faces)):
 
@@ -145,7 +144,7 @@ if "run" in argv:
 
                 matchX = 100
 
-                for j in range(5):
+                for j in range(len(matches)):
                     match_class = matches[j][0]
 
                     match = images[match_class]
