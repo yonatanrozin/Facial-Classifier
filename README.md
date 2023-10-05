@@ -14,7 +14,7 @@ A python script that uses a trained neural network to recognize faces from the w
 ## Training
 - ```cd``` into cloned repo folder
 - create image class sub-directories inside ```images``` directory. The name of the sub-directory will be used as the name of the class
-- insert any number of sample images into sub-directory, though the model already works well with only 1!
+  - insert any number of sample images into sub-directory, though the model already works well with only 1!
 - run ```python3 classifier.py train``` to begin training. May take a while depending on number of provided image classes
   - run this command any time new data is added
   - Or run ```python3 classifier.py train reset``` to reset and train all image classes from scratch (required if removing a class)
