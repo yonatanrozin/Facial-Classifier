@@ -9,8 +9,6 @@ valid_args = ['train', 'run', 'reset', 'list']
 msg = 'args must all be at least 1 of "train", "run", "reset" or "list".'
 assert len(argv) > 1 and not False in [(arg in valid_args) for arg in argv[1:]], msg
 
-
-
 import time
 import cv2
 import os
@@ -38,6 +36,9 @@ if 'train' in argv:
     for imgClass in os.listdir('images'):
 
         dirName = 'images/' + imgClass
+
+        if not os.path.isdir(dirName):
+            continue
 
         dirImages = os.listdir(dirName)
         if len(dirImages) == 0:
@@ -90,14 +91,11 @@ if 'train' in argv:
             sample_embeddings[imgClass] = class_embeddings
             np.save('embeddings.npy', sample_embeddings)
 
+    cv2.destroyAllWindows()
+
     
 
 if "run" in argv:
-
-    from matplotlib import pyplot as plt
-
-    plt.ion()
-    plt.show(block=False)
 
     try:
         sample_embeddings = np.load('embeddings.npy', allow_pickle=True).item()
@@ -115,47 +113,74 @@ if "run" in argv:
             
     while True:
 
-        plt.show(block=False)
 
         success, frame = cam.read()
 
         if (success):
 
+            output_frame = frame.copy()
+
             faces = croppedFacesFromImg(frame, 'haar')
             if len(faces) == 0:
                 continue
 
-            rows = len(faces)
+            rows = 3
             columns = 7 # 1 for input, 1 blank, 5 for top 5 matches
 
-            plt.clf()
-
-            for i in range(rows):
+            for i in range(len(faces)):
 
                 (x, y, w, h) = faces[i]
                 cropped = frame[y:y+h, x:x+w]
 
+                cv2.rectangle(output_frame, (x, y), (x+w, y+h), 0, 3)
 
                 # get top 5 matches
                 matches = classifyFace(cropped, sample_embeddings)[:5]
 
-                plt.subplot(rows, columns, 1 + i * columns)
-                plt.axis('off')
-                plt.imshow(cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB))
+                h_ratio = h/50
+                cropped = cv2.resize(cropped, (int(w/h_ratio), int(h/h_ratio)))
+                (h, w, _) = cropped.shape
 
-                plot_start_time = time.time()
-                for j in range(len(matches)):
+                output_frame[i * 60 + 10 : i * 60 + 10 + h, 10 : 10 + w]
 
+                matchX = 100
+
+                for j in range(5):
                     match_class = matches[j][0]
 
-                    plt.subplot(rows, columns, 1 + i * columns + j + 2) 
-                    plt.title(f"{matches[j][0]}: {100 - int(matches[j][1]*100)}%")
-                    plt.imshow(images[match_class])
-                    plt.axis('off')
+                    match = images[match_class]
+                    
+                    (h, w, _) = match.shape
 
-                plt.tight_layout()
-                plt.pause(.001)
-                print('plotting time: ', time.time() - plot_start_time)
+                    h_ratio = h/50
+                    match = cv2.resize(match, (int(w/h_ratio), int(h/h_ratio)))
+                    
+                    (h, w, _) = match.shape # new dimensions after resizing
+
+                    output_frame[i * 60 + 10 : i * 60 + 10 + h, matchX : matchX + w] = match
+
+                    matchX += w + 10
+                    
+            cv2.imshow('test', output_frame)
+            cv2.waitKey(5)
+
+                # plt.subplot(rows, columns, 1 + i * columns)
+                # plt.axis('off')
+                # plt.imshow(cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB))
+
+                # plot_start_time = time.time()
+                # for j in range(len(matches)):
+
+                #     match_class = matches[j][0]
+
+                #     plt.subplot(rows, columns, 1 + i * columns + j + 2) 
+                #     plt.title(f"{matches[j][0]}: {100 - int(matches[j][1]*100)}%")
+                #     plt.imshow(images[match_class])
+                #     plt.axis('off')
+
+                # plt.tight_layout()
+                # plt.pause(.01)
+                # print('plotting time: ', time.time() - plot_start_time)
               
 
                 # for j in range(5):
@@ -172,9 +197,7 @@ if "run" in argv:
                 # cv2.putText(frame, top_result, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,0,0), 2)
 
 
-            
-            plt.show()
-
+        
             # frame = cv2.resize(frame, (512, 512))
 
             # cv2.imshow('test', frame)
