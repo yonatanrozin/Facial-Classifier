@@ -21,7 +21,7 @@ from keras_facenet import FaceNet
 facenet = FaceNet() # model to extract embeddings from cropped face images
 
 if 'list' in argv:
-    print([key for key in np.load('labels.npy', allow_pickle=True).item()])
+    print([key for key in np.load('embeddings.npy', allow_pickle=True).item()])
 
 if 'train' in argv:
 
@@ -30,9 +30,10 @@ if 'train' in argv:
     else:
         try:
             # load pre-trained data
-            sample_embeddings = np.load('labels.npy', allow_pickle=True).item()
+            sample_embeddings = np.load('embeddings.npy', allow_pickle=True).item()
         except:
-            print('no .npy labels file found.')
+            print("no .npy labels file found. Training from scratch.")
+            sample_embeddings = {}
     
     for imgClass in os.listdir('images'):
 
@@ -87,7 +88,7 @@ if 'train' in argv:
 
         if len(class_embeddings) > 0:
             sample_embeddings[imgClass] = class_embeddings
-            np.save('labels.npy', sample_embeddings)
+            np.save('embeddings.npy', sample_embeddings)
 
     
 
@@ -98,7 +99,11 @@ if "run" in argv:
     plt.ion()
     plt.show(block=False)
 
-    sample_embeddings = np.load('labels.npy', allow_pickle=True).item()
+    try:
+        sample_embeddings = np.load('embeddings.npy', allow_pickle=True).item()
+    except:
+        print('Model not trained. Run "classifier.py train" to train.')
+        exit()
 
     cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 
