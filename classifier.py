@@ -9,7 +9,6 @@ valid_args = ['train', 'run', 'reset', 'list']
 msg = 'args must all be at least 1 of "train", "run", "reset" or "list".'
 assert len(argv) > 1 and not False in [(arg in valid_args) for arg in argv[1:]], msg
 
-import time
 import cv2
 import os
 import numpy as np
@@ -33,6 +32,7 @@ if 'train' in argv:
             print("no .npy labels file found. Training from scratch.")
             sample_embeddings = {}
     
+    # iterate through sub-directories in 'images', using dir name as class name
     for imgClass in os.listdir('images'):
 
         dirName = 'images/' + imgClass
@@ -41,31 +41,30 @@ if 'train' in argv:
             continue
 
         dirImages = os.listdir(dirName)
-        if len(dirImages) == 0:
+        if len(dirImages) == 0: #ignore empty directories
             print(f'empty directory: {dirName}')
             continue
         newClass = not imgClass in sample_embeddings
         newData = not newClass and len(dirImages) != len(sample_embeddings[imgClass])
         dataExists = not newClass and not newData
 
-        if dataExists: 
+        if dataExists: #ignore data that has already been added
             continue
-
         if newClass:
             print(f"new class: {imgClass}")
         elif newData:
             print(f"new data found for class: {imgClass}")
 
-        class_embeddings = []
+        class_embeddings = [] #array to hold face embeddings for current class
 
-        for imgFile in os.listdir(dirName):
+        #per image inside sub-directory - get facial embeddings from cropped face
+        for imgFile in os.listdir(dirName): 
             
             imgFile = f"{dirName}/{imgFile}"
             img = cv2.imread(imgFile)
             
-            # attempt extracting face from file (throws an error if file is not an image)
             try:
-                faces = croppedFacesFromImg(img, 'MTCNN')
+                faces = croppedFacesFromImg(img, 'MTCNN') #use MTCNN (not haar) for accuracy
                 if len(faces) == 0:
                     print(f'no face found in img {imgFile}')
                     continue
@@ -73,29 +72,37 @@ if 'train' in argv:
                 print(f"error reading img {imgFile}")
                 continue
 
+            # only consider largest face per image
             faceAreas = [w * h for (x, y, w, h) in faces]
-
             x, y, w, h = faces[faceAreas.index(max(faceAreas))]
             croppedFace = img[y:y+h, x:x+w]
             
             class_embeddings.append(facenet.embeddings([croppedFace]))
 
-            #resize cropped face for preview + include label
+            #display normalized height image + label while training
             h_ratio = h/256
             previewImg = cv2.resize(croppedFace, (int(w/h_ratio), int(h/h_ratio)))
             cv2.putText(previewImg, imgClass, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (50), 2)
             cv2.imshow('test', previewImg)
             cv2.waitKey(5)
 
+        #add facial embeddings for this class to dictionary + save to file
         if len(class_embeddings) > 0:
             sample_embeddings[imgClass] = class_embeddings
             np.save('embeddings.npy', sample_embeddings)
 
     cv2.destroyAllWindows()
 
-    
+
+
 
 if "run" in argv:
+
+    image_margin = 20 # space between displayed images and window border
+    matches_offset_initial = 200 # horizontal starting position of displayed matched images
+    matches_offset_increment = 150 # increment of horizontal position per matched image
+    matched_image_height = 100 # normalized height of all displayed images
+    matches_row_height = 200 # total row height per matched face (includes labels)
 
     try:
         sample_embeddings = np.load('embeddings.npy', allow_pickle=True).item()
@@ -105,6 +112,7 @@ if "run" in argv:
 
     cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 
+    # get match images ahead of time to avoid frequent file system reading
     images = {}
     for imgClass in sample_embeddings.keys():
         dirName = "images/" + imgClass
@@ -117,35 +125,37 @@ if "run" in argv:
 
         if (success):
 
-            #resize frame to 1000px high
+            #resize frame to 1000px wide, maintaining proportions
             (frameH, frameW, _) = frame.shape
             frame_w_ratio = frameW/1000
             frame = cv2.resize(frame, (int(frameW/frame_w_ratio), int(frameH/frame_w_ratio)))
 
             output_frame = frame.copy()
 
+            #get cropped face
             faces = croppedFacesFromImg(frame, 'haar')
-            if len(faces) == 0:
-                continue
 
+            #per matched face from webcam
             for i in range(len(faces)):
 
+                #get cropped face
                 (x, y, w, h) = faces[i]
                 cropped = frame[y:y+h, x:x+w]
-
                 cv2.rectangle(output_frame, (x, y), (x+w, y+h), 0, 3)
 
-                # get top 5 matches
-                matches = classifyFace(cropped, sample_embeddings)[:5]
+                matches = classifyFace(cropped, sample_embeddings)[:5] # get 5 strongest matches
 
-                h_ratio = h/100
+                # normalize all image heights
+                h_ratio = h/matched_image_height
                 cropped = cv2.resize(cropped, (int(w/h_ratio), int(h/h_ratio)))
+
+                # display cropped face
                 (faceH, faceW, _) = cropped.shape
+                output_frame[i * matches_row_height + image_margin : i * matches_row_height + image_margin + faceH, image_margin : image_margin + faceW] = cropped
 
-                output_frame[i * 200 + 20 : i * 200 + 20 + faceH, 20 : 20 + faceW] = cropped
+                matches_offset = matches_offset_initial
 
-                matchX = 200
-
+                #for each match, display normalized height sample image, class label + confidence score 
                 for j in range(len(matches)):
                     match_class = matches[j][0]
                     match_confidence = int((1-matches[j][1]) * 100)
@@ -153,18 +163,23 @@ if "run" in argv:
                     if match_confidence < 10:
                         continue
 
+                    # normalize image height + overlay on webcam frame
                     match = images[match_class]
                     (h, w, _) = match.shape
-                    h_ratio = h/100
+                    h_ratio = h/matched_image_height
                     match = cv2.resize(match, (int(w/h_ratio), int(h/h_ratio)))
                     
-                    (h, w, _) = match.shape # new dimensions after resizing
-                    output_frame[i * 200 + 20 : i * 200 + 20 + h, matchX : matchX + w] = match
+                    (h, w, _) = match.shape
+                    output_frame[i * matches_row_height + image_margin : i * matches_row_height + image_margin + h, matches_offset : matches_offset + w] = match
 
-                    cv2.putText(output_frame, match_class, (matchX, i*200+20 + h + 20), cv2.FONT_HERSHEY_COMPLEX, .7, (255,0,0))
-                    cv2.putText(output_frame, str(match_confidence)+"%", (matchX, i*200+20 + h + 50), cv2.FONT_HERSHEY_COMPLEX, .7, (255,0,0))
+                    # show labels: class and confidence
+                    cv2.putText(output_frame, match_class, (matches_offset, i*matches_row_height+image_margin + h + image_margin), cv2.FONT_HERSHEY_COMPLEX, .7, (255,0,0))
+                    cv2.putText(output_frame, str(match_confidence)+"%", (matches_offset, i*matches_row_height+image_margin + h + 50), cv2.FONT_HERSHEY_COMPLEX, .7, (255,0,0))
 
-                    matchX += 150
+                    matches_offset += matches_offset_increment
                     
-            cv2.imshow('test', output_frame)
-            cv2.waitKey(5)
+            cv2.imshow('Classifier', output_frame)
+            if cv2.waitKey(5) == ord('q'):
+                exit()
+
+    
