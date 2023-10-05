@@ -109,16 +109,18 @@ if "run" in argv:
     for imgClass in sample_embeddings.keys():
         dirName = "images/" + imgClass
         imgName = dirName + '/' + os.listdir(dirName)[0]
-        images[imgClass] = cv2.cvtColor(cv2.imread(imgName), cv2.COLOR_BGR2RGB)
+        images[imgClass] = cv2.imread(imgName)
             
     while True:
-
 
         success, frame = cam.read()
 
         if (success):
 
-            print(frame.shape)
+            #resize frame to 1000px high
+            (frameH, frameW, _) = frame.shape
+            frame_w_ratio = frameW/1000
+            frame = cv2.resize(frame, (int(frameW/frame_w_ratio), int(frameH/frame_w_ratio)))
 
             output_frame = frame.copy()
 
@@ -136,68 +138,33 @@ if "run" in argv:
                 # get top 5 matches
                 matches = classifyFace(cropped, sample_embeddings)[:5]
 
-                h_ratio = h/50
+                h_ratio = h/100
                 cropped = cv2.resize(cropped, (int(w/h_ratio), int(h/h_ratio)))
-                (h, w, _) = cropped.shape
+                (faceH, faceW, _) = cropped.shape
 
-                output_frame[i * 60 + 10 : i * 60 + 10 + h, 10 : 10 + w]
+                output_frame[i * 200 + 20 : i * 200 + 20 + faceH, 20 : 20 + faceW] = cropped
 
-                matchX = 100
+                matchX = 200
 
                 for j in range(len(matches)):
                     match_class = matches[j][0]
+                    match_confidence = int((1-matches[j][1]) * 100)
+
+                    if match_confidence < 10:
+                        continue
 
                     match = images[match_class]
-                    
                     (h, w, _) = match.shape
-
-                    h_ratio = h/50
+                    h_ratio = h/100
                     match = cv2.resize(match, (int(w/h_ratio), int(h/h_ratio)))
                     
                     (h, w, _) = match.shape # new dimensions after resizing
+                    output_frame[i * 200 + 20 : i * 200 + 20 + h, matchX : matchX + w] = match
 
-                    output_frame[i * 60 + 10 : i * 60 + 10 + h, matchX : matchX + w] = match
+                    cv2.putText(output_frame, match_class, (matchX, i*200+20 + h + 20), cv2.FONT_HERSHEY_COMPLEX, .7, (255,0,0))
+                    cv2.putText(output_frame, str(match_confidence)+"%", (matchX, i*200+20 + h + 50), cv2.FONT_HERSHEY_COMPLEX, .7, (255,0,0))
 
-                    matchX += w + 10
+                    matchX += 150
                     
             cv2.imshow('test', output_frame)
             cv2.waitKey(5)
-
-                # plt.subplot(rows, columns, 1 + i * columns)
-                # plt.axis('off')
-                # plt.imshow(cv2.cvtColor(cropped, cv2.COLOR_BGR2RGB))
-
-                # plot_start_time = time.time()
-                # for j in range(len(matches)):
-
-                #     match_class = matches[j][0]
-
-                #     plt.subplot(rows, columns, 1 + i * columns + j + 2) 
-                #     plt.title(f"{matches[j][0]}: {100 - int(matches[j][1]*100)}%")
-                #     plt.imshow(images[match_class])
-                #     plt.axis('off')
-
-                # plt.tight_layout()
-                # plt.pause(.01)
-                # print('plotting time: ', time.time() - plot_start_time)
-              
-
-                # for j in range(5):
-                #     print(predictions[i])
-                
-                # plt.subplot(rows, columns, i * 7 + 1)
-                # plt.imshow()
-
-
-
-                # top_result = f"{predictions[0][0]} ({int((1-predictions[0][1])*100)}%)"
-
-                # cv2.rectangle(frame, (x, y), (x+w, y+h), (255,0,0), 2)
-                # cv2.putText(frame, top_result, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,0,0), 2)
-
-
-        
-            # frame = cv2.resize(frame, (512, 512))
-
-            # cv2.imshow('test', frame)
-            # cv2.waitKey(5)
