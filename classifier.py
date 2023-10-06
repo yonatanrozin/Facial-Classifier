@@ -127,27 +127,30 @@ if "run" in argv:
     matches_row_height = 200 # total row height per matched face (includes labels)
 
     try:
+        print('loading facial embeddings file...')
         sample_embeddings = np.load('embeddings.npy', allow_pickle=True).item()
     except:
-        print('Model not trained. Run "classifier.py train" to train.')
+        print('Error loading file, or embeddings not yet obtained. Run "classifier.py train" to retrieve embeddings.')
         exit()
 
-    try:
-        cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-    except:
-        print("Error opening camera. This may be related to your device's specific camera.\n" + 
+
+    print("***Opening webcam for video capture. This line of code may differ between devices!!\n" + 
               "See https://docs.opencv.org/3.4/d8/dfe/classcv_1_1VideoCapture.html#ad890d4783ff81f53036380bd89dd31aa for more info.")
-        
+    cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 
     # get match images ahead of time to avoid frequent file system reading
+    print('retrieving sample images per class...')
     images = {}
     for imgClass in sample_embeddings.keys():
         dirName = "images/" + imgClass
         imgName = dirName + '/' + os.listdir(dirName)[0]
         images[imgClass] = cv2.imread(imgName)
+
+    print()
             
     while True:
 
+        print('retrieving new frame.')
         success, frame = cam.read()
 
         if (success):
@@ -160,11 +163,12 @@ if "run" in argv:
             output_frame = frame.copy()
 
             #get cropped face
+            print('extracting face(s) from frame.')
             faces = croppedFacesFromImg(frame, 'haar')
             faces = sorted(faces, key=lambda x: x[2] * x[3], reverse=True)
 
-
             #per matched face from webcam
+            print('getting top 5 matches.')
             for i in range(len(faces)):
 
                 #get cropped face
@@ -174,9 +178,10 @@ if "run" in argv:
                 matches = classifyFace(cropped, sample_embeddings)[:5] # get 5 strongest matches
 
                 if min([match[1] for match in matches]) > .6:
-                    print('no strong match found. skipping.')
+                    print('no strong match found. skipping this frame.')
                     continue
 
+                print('displaying scanned face(s)')
                 cv2.rectangle(output_frame, (x, y), (x+w, y+h), 0, 3)
 
                 # normalize all image heights
@@ -191,6 +196,7 @@ if "run" in argv:
 
 
                 #for each match, display normalized height sample image, class label + confidence score 
+                print('displaying matches.')
                 for j in range(len(matches)):
                     match_class = matches[j][0]
                     match_confidence = int((1-matches[j][1]) * 100)
@@ -209,6 +215,8 @@ if "run" in argv:
                     cv2.putText(output_frame, str(match_confidence)+"%", (matches_offset, i*matches_row_height+image_margin + h + 50), cv2.FONT_HERSHEY_COMPLEX, .7, (255,0,0))
 
                     matches_offset += matches_offset_increment
+
+            print()
                     
             cv2.imshow('Classifier', output_frame)
             if cv2.waitKey(5) == ord('q'):
