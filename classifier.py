@@ -4,23 +4,30 @@ Yonatan Rozin
 """
 
 from sys import argv
+import time
 
-valid_args = ['train', 'run', 'reset', 'list']
-msg = 'args must all be at least 1 of "train", "run", "reset" or "list".'
+valid_args = ['train', 'run', 'reset', 'list', 'debug']
+msg = f'args must all be at least 1 of {valid_args}.'
 assert len(argv) > 1 and not False in [(arg in valid_args) for arg in argv[1:]], msg
 
-import cv2
-import os
-import numpy as np
-from utils import *
-
-from keras_facenet import FaceNet
-facenet = FaceNet() # model to extract embeddings from cropped face images
-
 if 'list' in argv:
-    print([key for key in np.load('embeddings.npy', allow_pickle=True).item()])
+    import numpy as np
+    try:
+        print([key for key in np.load('embeddings.npy', allow_pickle=True).item()])
+    except:
+        print("Error finding embeddings.npy. Run 'python3 classifier.py train' first to assemble facial embeddings.")
 
 if 'train' in argv:
+
+    print('importing modules...')
+
+    train_start_time = time.time()
+
+    import cv2, os
+    from keras_facenet import FaceNet
+    from utils import *
+    import numpy as np
+    facenet = FaceNet() # model to extract embeddings from cropped face images
 
     if 'reset' in argv:
         sample_embeddings = {} # dict to hold extracted embedding(s) per image class
@@ -33,22 +40,26 @@ if 'train' in argv:
             sample_embeddings = {}
     
     # iterate through sub-directories in 'images', using dir name as class name
+
+    print('fetching sample images.')
     for imgClass in os.listdir('images'):
 
         dirName = 'images/' + imgClass
+        print(f'directory: {dirName}')
 
         if not os.path.isdir(dirName):
             continue
 
         dirImages = os.listdir(dirName)
         if len(dirImages) == 0: #ignore empty directories
-            print(f'empty directory: {dirName}')
+            print(f'empty directory: {dirName} - skipping.')
             continue
         newClass = not imgClass in sample_embeddings
         newData = not newClass and len(dirImages) != len(sample_embeddings[imgClass])
         dataExists = not newClass and not newData
 
         if dataExists: #ignore data that has already been added
+            print(f"data already exists for class {imgClass}")
             continue
         if newClass:
             print(f"new class: {imgClass}")
@@ -59,16 +70,19 @@ if 'train' in argv:
 
         #per image inside sub-directory - get facial embeddings from cropped face
         for imgFile in os.listdir(dirName): 
-            
             imgFile = f"{dirName}/{imgFile}"
+            print(f'image: {imgFile}')
             img = cv2.imread(imgFile)
+
             
             try:
+                print(f"extracting face...")
                 faces = croppedFacesFromImg(img, 'MTCNN') #use MTCNN (not haar) for accuracy
                 if len(faces) == 0:
                     print(f'no face found in img {imgFile}')
                     continue
-            except:
+            except Exception as e:
+                print(e)
                 print(f"error reading img {imgFile}")
                 continue
 
@@ -89,14 +103,22 @@ if 'train' in argv:
         #add facial embeddings for this class to dictionary + save to file
         if len(class_embeddings) > 0:
             sample_embeddings[imgClass] = class_embeddings
+            print("Facial embeddings retrieved, saving to file.")
             np.save('embeddings.npy', sample_embeddings)
+
+        print()
 
     cv2.destroyAllWindows()
 
-
-
+    print(f"Classifier with {len(sample_embeddings)} classes trained in {(time.time() - train_start_time):.2f}s.")
 
 if "run" in argv:
+
+    print("importing modules...")
+
+    import numpy as np
+    import cv2, os
+    from utils import *
 
     image_margin = 20 # space between displayed images and window border
     matches_offset_initial = 200 # horizontal starting position of displayed matched images
@@ -110,7 +132,12 @@ if "run" in argv:
         print('Model not trained. Run "classifier.py train" to train.')
         exit()
 
-    cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    try:
+        cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    except:
+        print("Error opening camera. This may be related to your device's specific camera.\n" + 
+              "See https://docs.opencv.org/3.4/d8/dfe/classcv_1_1VideoCapture.html#ad890d4783ff81f53036380bd89dd31aa for more info.")
+        
 
     # get match images ahead of time to avoid frequent file system reading
     images = {}
@@ -134,6 +161,8 @@ if "run" in argv:
 
             #get cropped face
             faces = croppedFacesFromImg(frame, 'haar')
+            faces = sorted(faces, key=lambda x: x[2] * x[3], reverse=True)
+
 
             #per matched face from webcam
             for i in range(len(faces)):
@@ -141,9 +170,14 @@ if "run" in argv:
                 #get cropped face
                 (x, y, w, h) = faces[i]
                 cropped = frame[y:y+h, x:x+w]
-                cv2.rectangle(output_frame, (x, y), (x+w, y+h), 0, 3)
 
                 matches = classifyFace(cropped, sample_embeddings)[:5] # get 5 strongest matches
+
+                if min([match[1] for match in matches]) > .6:
+                    print('no strong match found. skipping.')
+                    continue
+
+                cv2.rectangle(output_frame, (x, y), (x+w, y+h), 0, 3)
 
                 # normalize all image heights
                 h_ratio = h/matched_image_height
@@ -155,13 +189,11 @@ if "run" in argv:
 
                 matches_offset = matches_offset_initial
 
+
                 #for each match, display normalized height sample image, class label + confidence score 
                 for j in range(len(matches)):
                     match_class = matches[j][0]
                     match_confidence = int((1-matches[j][1]) * 100)
-
-                    if match_confidence < 10:
-                        continue
 
                     # normalize image height + overlay on webcam frame
                     match = images[match_class]
