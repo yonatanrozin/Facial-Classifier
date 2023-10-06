@@ -1,10 +1,11 @@
 # Facial Classifier
-A python script that uses a trained neural network to recognize faces from the webcam
+A python script that uses a trained neural network to recognize faces from the webcam. Demo video can be found [here](https://youtu.be/5dGK7IvFhcE)
 
 ## Dependencies + Installation
 - Dependencies
   - [Python](https://www.python.org/) - tested with version 3.11.6
   - Python packages (use ```pip``` to install)
+    - [Scipy](https://pypi.org/project/scipy/) - tested with version 1.11.3
     - [Numpy](https://pypi.org/project/numpy/) - tested with version 1.24.3
     - [OpenCV-Python](https://pypi.org/project/opencv-python/) - tested with version 4.8.1
     - [Keras-FaceNet](https://pypi.org/project/keras-facenet/) - tested with version 0.3.2
@@ -24,3 +25,7 @@ A python script that uses a trained neural network to recognize faces from the w
 - (optional) run ```python3 classifier.py list``` to get a list of trained face classes
 - run ```python3 classifier.py run``` to begin running. A new window with the webcam view and classification results should pop up automatically.
 - press Q at any time to quit
+
+### Troubleshooting
+- OpenCV code to open the webcam for reading may differ with different device hardware. The line ```cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)``` may have to be modified according to your specific device. See [OpenCV VideoCapture docs](https://docs.opencv.org/3.4/d8/dfe/classcv_1_1VideoCapture.html#ad890d4783ff81f53036380bd89dd31aa) for more info.
+
