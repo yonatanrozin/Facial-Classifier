@@ -133,10 +133,13 @@ if "run" in argv:
         print('Error loading file, or embeddings not yet obtained. Run "classifier.py train" to retrieve embeddings.')
         exit()
 
+    cam_id = 0 # change this to desired camera ID (depending on # of available cameras)
 
     print("***Opening webcam for video capture. This line of code may differ between devices!!\n" + 
               "See https://docs.opencv.org/3.4/d8/dfe/classcv_1_1VideoCapture.html#ad890d4783ff81f53036380bd89dd31aa for more info.")
-    cam = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    
+    # cam = cv2.VideoCapture(cam_id)
+    cam = cv2.VideoCapture(cam_id, cv2.CAP_DSHOW)
 
     # get match images ahead of time to avoid frequent file system reading
     print('retrieving sample images per class...')
